@@ -28,7 +28,7 @@ class dataloader:
         self.base_dist = {}
         self.samples_dict = {}
         self.sizes = {}
-        
+
         self.load_dtype = load_dtype
         self.digitization1 = digitization1
         self.digitization2 = digitization2
@@ -41,7 +41,7 @@ class dataloader:
         self.distance_cutoff = distance_cutoff
         self.trrosetta_base = trrosetta_base
         if self.verbose: print("features:", self.features)
-            
+
         # Loading file availability
         temp = []
         #np.random.seed(7)
@@ -56,21 +56,21 @@ class dataloader:
                 continue
             #
             path = datadir+p+"/"
-            if not os.path.exists(path+"native.features.npz"):
+            if not os.path.exists(f"{path}native.features.npz"):
                 continue
-            samples = glob.glob(path + "*.features.npz")
+            samples = glob.glob(f"{path}*.features.npz")
 
             # Removing native from distribution if you are using distribution option
             if not self.include_native:
-                samples = [s for s in samples if not "native" in s]
+                samples = [s for s in samples if "native" not in s]
             #
-            sub_s = glob.glob(self.trrosetta_base + "%s/sub_*"%p)
+            sub_s = glob.glob(f"{self.trrosetta_base}{p}/sub_*")
             sub_s.sort()
-            base_dist = "%s/naive.npz"%(sub_s[-1])
+            base_dist = f"{sub_s[-1]}/naive.npz"
             #
             np.random.shuffle(samples)
-                    
-            if len(samples) > 0:
+
+            if samples:
                 print (samples[0])
                 length = np.load(samples[0])["tbt"].shape[-1]
                 if length < lengthmax:
@@ -95,77 +95,85 @@ class dataloader:
         data = np.load(sample)
         #
         if self.trrosetta_base != None:
-            if tr_idx != None: # testing
-                sub_s = glob.glob(self.trrosetta_base + "%s/new_0/naive_rolled.npz"%pname)
-                sub_s.extend(glob.glob(self.trrosetta_base + "%s/sub_0/naive.npz"%pname))
-                base_dist = sub_s[0]
-            else: # training
-                sub_s = glob.glob(self.trrosetta_base + "%s/sub_[0-2]/naive.npz"%pname)
-                sub_s.extend(glob.glob(self.trrosetta_base + "%s/sub_[0-2]/templ.npz"%pname))
-                sub_s.extend(glob.glob(self.trrosetta_base + "%s/new_[0-2]/naive_rolled.npz"%pname))
-                sub_s.extend(glob.glob(self.trrosetta_base + "%s/new_[0-2]/templ_rolled.npz"%pname))
+            if tr_idx is None: # training
+                sub_s = glob.glob(f"{self.trrosetta_base}{pname}/sub_[0-2]/naive.npz")
+                sub_s.extend(glob.glob(f"{self.trrosetta_base}{pname}/sub_[0-2]/templ.npz"))
+                sub_s.extend(
+                    glob.glob(
+                        f"{self.trrosetta_base}{pname}/new_[0-2]/naive_rolled.npz"
+                    )
+                )
+                sub_s.extend(
+                    glob.glob(
+                        f"{self.trrosetta_base}{pname}/new_[0-2]/templ_rolled.npz"
+                    )
+                )
                 base_dist = np.random.choice(sub_s)
+            else: # testing
+                sub_s = glob.glob(f"{self.trrosetta_base}{pname}/new_0/naive_rolled.npz")
+                sub_s.extend(glob.glob(f"{self.trrosetta_base}{pname}/sub_0/naive.npz"))
+                base_dist = sub_s[0]
             distogram_pred = np.load(base_dist)['dist']
-        
+
         # 3D information
         idx = data["idx"]
         val = data["val"]
-        
+
         # 1D information
         angles = np.stack([np.sin(data["phi"]), np.cos(data["phi"]), np.sin(data["psi"]), np.cos(data["psi"])], axis=-1)
         obt = data["obt"].T
         prop = data["prop"].T
-        
+
         # 2D information
         orientations = np.stack([data["omega6d"], data["theta6d"], data["phi6d"]], axis=-1)
         orientations = np.concatenate([np.sin(orientations), np.cos(orientations)], axis=-1)
         maps = data["maps"]
         tbt = data["tbt"].T
         sep = seqsep(psize)
-        
+
         if self.distribution:
             if self.include_native_dist:
                 dist = np.load(self.datadir+pname+"/dist.npy")
             else:
                 dist = np.load(self.datadir+pname+"/dist2.npy")
-        
+
         # Get target
         native = np.load(self.datadir+pname+"/native.features.npz")["tbt"][0]
         estogram = get_estogram((tbt[:,:,0], native), self.digitization1)
-        
+
         # Transform input distance
         if transform:
             tbt[:,:,0] = f(tbt[:,:,0])
             maps = f(maps, cutoff=self.distance_cutoff)
-        
+
         self.cur_index += 1
         if self.cur_index == len(self.proteins):        
             self.cur_index = 0 
             np.random.shuffle(self.index)
-            
-            
+
+
         if self.verbose:
             print(angles.shape, obt.shape, prop.shape)
             print(tbt.shape, maps.shape, euler.shape, orientations.shape, sep.shape)
-            
+
         if self.distribution:
             return (idx, val),\
-                    np.concatenate([angles, obt, prop], axis=-1),\
-                    np.concatenate([maps, orientations, sep, distogram_pred, dist], axis=-1),\
-                    (estogram, native)
+                        np.concatenate([angles, obt, prop], axis=-1),\
+                        np.concatenate([maps, orientations, sep, distogram_pred, dist], axis=-1),\
+                        (estogram, native)
                     #np.concatenate([tbt, maps, euler, orientations, sep, distogram_pred, dist], axis=-1),\
         else:
             if self.trrosetta_base != None:
                 return (idx, val),\
-                        np.concatenate([angles, obt, prop], axis=-1).astype(np.float32),\
-                        np.concatenate([tbt, maps, orientations, sep, distogram_pred], axis=-1).astype(np.float32),\
-                        (estogram, native)
+                            np.concatenate([angles, obt, prop], axis=-1).astype(np.float32),\
+                            np.concatenate([tbt, maps, orientations, sep, distogram_pred], axis=-1).astype(np.float32),\
+                            (estogram, native)
                         #np.concatenate([tbt, maps, euler, orientations, sep, distogram_pred], axis=-1).astype(np.float32),\
             else:
                 return (idx, val),\
-                        np.concatenate([angles, obt, prop], axis=-1).astype(np.float32),\
-                        np.concatenate([tbt, maps, euler, orientations, sep], axis=-1).astype(np.float32),\
-                        (estogram, native)
+                            np.concatenate([angles, obt, prop], axis=-1).astype(np.float32),\
+                            np.concatenate([tbt, maps, euler, orientations, sep], axis=-1).astype(np.float32),\
+                            (estogram, native)
     
         
 def f(X, cutoff=6, scaling=3.0):
@@ -175,8 +183,7 @@ def f(X, cutoff=6, scaling=3.0):
 def get_estogram(XY, digitization):
     (X,Y) = XY
     residual = X-Y
-    estogram = np.eye(len(digitization)+1)[np.digitize(residual, digitization)]
-    return estogram
+    return np.eye(len(digitization)+1)[np.digitize(residual, digitization)]
 
 # Sequence separtion features
 def seqsep(psize, normalizer=100, axis=-1):
@@ -212,18 +219,17 @@ def getMask(exclude):
             print([i[0] for i in feature1D])
             print([i[0] for i in feature2D])
             return -1
-    mask = []
     temp = []
     index = 0
     for f in feature1D:
-        for i in range(f[1]):
+        for _ in range(f[1]):
             if f[0] in exclude: temp.append(index)
             index+=1
-    mask.append(temp)
+    mask = [temp]
     temp = []
     index = 0
     for f in feature2D:
-        for i in range(f[1]):
+        for _ in range(f[1]):
             if f[0] in exclude: temp.append(index)
             index+=1
     mask.append(temp)

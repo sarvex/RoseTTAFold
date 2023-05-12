@@ -161,8 +161,7 @@ class FastAttention(nn.Module):
             k = create_kernel(k, is_query = False)
 
         attn_fn = linear_attention
-        out = attn_fn(q, k, v)
-        return out
+        return attn_fn(q, k, v)
 
 # classes
 class ReZero(nn.Module):
@@ -214,7 +213,7 @@ class SelfAttention(nn.Module):
         dim_head = dim // heads
         inner_dim = dim_head * heads
 
-        if k_dim == None:
+        if k_dim is None:
             k_dim = dim
 
         self.fast_attention = FastAttention(dim_head, nb_features, generalized_attention = generalized_attention, kernel_fn = kernel_fn, qr_uniform_q = qr_uniform_q, no_projection = no_projection)

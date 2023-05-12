@@ -79,7 +79,7 @@ def gen_rst(params):
     step = 0.5
     for a,b,p,p_12 in zip(i,j,prob,prob_12):
         y = pyrosetta.rosetta.utility.vector1_double()
-        if sg_flag == True:
+        if sg_flag:
             _ = [y.append(v) for v in savgol_filter(dist[a,b],sg_w,sg_n)]
         else:
             _ = [y.append(v) for v in dist[a,b]]
@@ -249,19 +249,19 @@ def random_dihedral():
     phi=0
     psi=0
     r=random.random()
-    if(r<=0.135):
+    if (r<=0.135):
         phi=-140
         psi=153
-    elif(r>0.135 and r<=0.29):
+    elif r <= 0.29:
         phi=-72
         psi=145
-    elif(r>0.29 and r<=0.363):
+    elif r <= 0.363:
         phi=-122
         psi=117
-    elif(r>0.363 and r<=0.485):
+    elif r <= 0.485:
         phi=-82
         psi=-14
-    elif(r>0.485 and r<=0.982):
+    elif r <= 0.982:
         phi=-61
         psi=-41
     else:
@@ -295,11 +295,11 @@ def remove_clash(scorefxn, mover, pose):
 
 
 def add_rst(pose, rst, sep1, sep2, params, nogly=False, use_orient=None, pcut=None, p12_cut=0.0):
-    if use_orient == None:
+    if use_orient is None:
         use_orient = params['USE_ORIENT']
-    if pcut == None:
+    if pcut is None:
         pcut=params['PCUT']
-    
+
     seq = params['seq']
 
     # collect restraints
@@ -350,15 +350,15 @@ def add_rst(pose, rst, sep1, sep2, params, nogly=False, use_orient=None, pcut=No
 
 def add_crd_rst(pose, nres, std=1.0, tol=1.0):
     flat_har = rosetta.core.scoring.func.FlatHarmonicFunc(0.0, std, tol)
-    rst = list()
+    rst = []
     for i in range(1, nres+1):
         xyz = pose.residue(i).atom("CA").xyz() # xyz coord of CA atom
         ida = rosetta.core.id.AtomID(2,i) # CA idx for residue i
         rst.append(rosetta.core.scoring.constraints.CoordinateConstraint(ida, ida, xyz, flat_har)) 
 
-    if len(rst) < 1:
+    if not rst:
         return
-    
+
     print ("Number of applied coordinate restraints:", len(rst))
     #random.shuffle(rst)
 

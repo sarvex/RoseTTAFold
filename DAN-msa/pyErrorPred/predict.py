@@ -49,9 +49,13 @@ def transfomer(X, cutoff=6, scaling=3.0):
 
 def getDistribution(outfolder):
     path = outfolder
-    tbts = [np.load(path+"/"+f)["tbt"][0,:,:] for f in os.listdir(path) if isfile(join(path,f)) and ".features.npz" in f]
+    tbts = [
+        np.load(f"{path}/{f}")["tbt"][0, :, :]
+        for f in os.listdir(path)
+        if isfile(join(path, f)) and ".features.npz" in f
+    ]
     for i in range(len(tbts)-1):
-        if not tbts[i].shape == tbts[i+1].shape:
+        if tbts[i].shape != tbts[i + 1].shape:
             print("All pdbs in the input folder need to have the same size.")
     tbt = np.array(tbts)
     transformed = transfomer(tbt, cutoff=6, scaling=1.0)
@@ -61,11 +65,11 @@ def getDistribution(outfolder):
     np.save(join(outfolder, "dist.npy"), normalized)
     
 def predict(samples, distogram, modelpath, outfolder, verbose=False, transpose=False):
-    n_models = 2 
+    n_models = 2
     for i in range(1, n_models):
-        modelname = modelpath+"_rep"+str(i)
+        modelname = f"{modelpath}_rep{str(i)}"
         if verbose: print("Loading", modelname)
-        
+
         model = Model(obt_size=70,
                       tbt_size=58,
                       prot_size=None,
@@ -76,19 +80,22 @@ def predict(samples, distogram, modelpath, outfolder, verbose=False, transpose=F
                       name=modelname,
                       verbose=False)
         model.load()
-            
+
         for j in range(len(samples)):
-            if verbose: print("Predicting for", samples[j], "(network rep"+str(i)+")") 
-            tmp = join(outfolder, samples[j]+".features.npz")
+            if verbose:
+                print("Predicting for", samples[j], f"(network rep{str(i)})")
+            tmp = join(outfolder, f"{samples[j]}.features.npz")
             batch = getData(tmp, outfolder, distogram)
             lddt, estogram, mask = model.predict2(batch)
             if transpose:
                 estogram = (estogram + np.transpose(estogram, [1,0,2]))/2
                 mask = (mask + mask.T)/2
-            np.savez_compressed(join(outfolder, samples[j]+".npz"),
-                                lddt = lddt,
-                                estogram = estogram,
-                                mask = mask)
+            np.savez_compressed(
+                join(outfolder, f"{samples[j]}.npz"),
+                lddt=lddt,
+                estogram=estogram,
+                mask=mask,
+            )
                 
 def merge(samples, outfolder, verbose=False):
     for j in range(len(samples)):
@@ -98,7 +105,7 @@ def merge(samples, outfolder, verbose=False):
         estogram = []
         mask = []
         for i in range(1,5):
-            temp = np.load(join(outfolder, samples[j]+".rep"+str(i)+".npz"))
+            temp = np.load(join(outfolder, f"{samples[j]}.rep{str(i)}.npz"))
             lddt.append(temp["lddt"])
             estogram.append(temp["estogram"])
             mask.append(temp["mask"])
@@ -109,12 +116,15 @@ def merge(samples, outfolder, verbose=False):
         mask = np.mean(mask, axis=0)
 
         # Saving
-        np.savez_compressed(join(outfolder, samples[j]+".npz"),
-                lddt = lddt,
-                estogram = estogram,
-                mask = mask)
+        np.savez_compressed(
+            join(outfolder, f"{samples[j]}.npz"),
+            lddt=lddt,
+            estogram=estogram,
+            mask=mask,
+        )
                 
 def clean(samples, outfolder, verbose=False):
     for i in range(len(samples)):
-        if verbose: print("Removing", join(outfolder, samples[i]+".features.npz"))
-        os.remove(join(outfolder, samples[i]+".features.npz"))
+        if verbose:
+            print("Removing", join(outfolder, f"{samples[i]}.features.npz"))
+        os.remove(join(outfolder, f"{samples[i]}.features.npz"))

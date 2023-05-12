@@ -14,9 +14,8 @@ def smooth(x, window_len=13, window='hanning'):
     if window == 'flat': #moving average
         w = np.onew(window_len, 'd')
     else:
-        w = eval('np.'+window+'(window_len)')
-    y = np.convolve(w/w.sum(), s, mode='valid')
-    return y
+        w = eval(f'np.{window}(window_len)')
+    return np.convolve(w/w.sum(), s, mode='valid')
 
 def lrQres2CAdev(estogram,mask,minseqsep=13):
     # first get masked contact list
@@ -27,8 +26,8 @@ def lrQres2CAdev(estogram,mask,minseqsep=13):
             if abs(i-j) < minseqsep: continue ## up to 3 H turns
             if mask[i][j] > 0.1: contacts.append((i,j,mask[i][j]))
 
-    lddt_raw = [0.0 for i in range(nres)]
-    Psum = [0.0001 for i in range(nres)]
+    lddt_raw = [0.0 for _ in range(nres)]
+    Psum = [0.0001 for _ in range(nres)]
     for (i,j,P) in contacts:
         in05 = estogram[i][j][7]
         in1 = np.sum(estogram[i][j][6:9])
@@ -39,38 +38,26 @@ def lrQres2CAdev(estogram,mask,minseqsep=13):
         lddt_raw[j] += inall
         Psum[i] += P
         Psum[j] += P
-        
+
     lddt_lr = np.array([lddt_raw[i]/Psum[i] for i in range(nres)])
     lddt_lr = smooth(lddt_lr)
-    # v1:
-    #CAdev = [np.exp(5*(0.6-lddt_res)) for lddt_res in lddt_lr]
-    # Qlr 0.8 -> err 0.4 Ang
-    # Qlr 0.7 -> err 0.6 Ang
-    # Qlr 0.6 -> err 1.0 Ang
-    # Qlr 0.5 -> err 1.6 Ang
-    # Qlr 0.4 -> err 2.7 Ang
-    # Qlr 0.3 -> err 4.5 Ang
-    # Qlr 0.2 -> err 7.4 Ang
-    
-    # v2:
-    CAdev = [1.5*np.exp(4*(0.7-lddt_res)) for lddt_res in lddt_lr]
-    # Qlr 0.8 -> err 1.0 Ang
-    # Qlr 0.7 -> err 1.0 Ang
-    # Qlr 0.6 -> err 2.2 Ang
-    # Qlr 0.5 -> err 3.3 Ang
-    # Qlr 0.4 -> err 5.0 Ang
-    # Qlr 0.3 -> err 7.4 Ang
-    # Qlr 0.2 -> err 11.  Ang
-    
-    return CAdev
+    return [1.5*np.exp(4*(0.7-lddt_res)) for lddt_res in lddt_lr]
 
 def calc_lddt_dist(args):
     i, j, pose_s = args
     pose_i = pose_s[i]
     pose_j = pose_s[j]
     #
-    lddt_1 = float(os.popen("%s/lddt/lddt -c %s %s | grep Glob"%(script_dir, pose_i, pose_j)).readlines()[-1].split()[-1])
-    lddt_2 = float(os.popen("%s/lddt/lddt -c %s %s | grep Glob"%(script_dir, pose_j, pose_i)).readlines()[-1].split()[-1])
+    lddt_1 = float(
+        os.popen(f"{script_dir}/lddt/lddt -c {pose_i} {pose_j} | grep Glob")
+        .readlines()[-1]
+        .split()[-1]
+    )
+    lddt_2 = float(
+        os.popen(f"{script_dir}/lddt/lddt -c {pose_j} {pose_i} | grep Glob")
+        .readlines()[-1]
+        .split()[-1]
+    )
     lddt = (lddt_1 + lddt_2) / 2.0
     return 1 - lddt
 
@@ -81,12 +68,12 @@ n_core = int(sys.argv[3])
 if not os.path.exists(outfolder):
     os.mkdir(outfolder)
 
-pdb_s = glob.glob("%s/model*.pdb"%infolder)
+pdb_s = glob.glob(f"{infolder}/model*.pdb")
 pdb_s.sort()
 
-lddt_s = list()
+lddt_s = []
 for pdb in pdb_s:
-    npz_fn = pdb[:-4] + ".npz"
+    npz_fn = f"{pdb[:-4]}.npz"
     if not os.path.exists(npz_fn):
         continue
     lddt = np.load(npz_fn)['lddt']
@@ -94,8 +81,8 @@ for pdb in pdb_s:
 
 # clustering top50% structures from trRefine
 lddt_s.sort(reverse=True)
-selected = list()
-score_s = list()
+selected = []
+score_s = []
 n_str = len(lddt_s) // 2
 for i in range(n_str):
     pdb = lddt_s[i][-1]
@@ -104,11 +91,9 @@ for i in range(n_str):
 score_s = np.array(score_s)
 selected = np.array(selected)
 
-args = list()
+args = []
 for i in range(n_str-1):
-    for j in range(i+1, n_str):
-        args.append((i,j,selected))
-
+    args.extend((i, j, selected) for j in range(i+1, n_str))
 n_core_pool = min(n_core, len(args))
 pool = mp.Pool(n_core_pool)
 raw_dist = pool.map(calc_lddt_dist, args)
@@ -122,7 +107,7 @@ dist = dist + dist.T
 cluster = AgglomerativeClustering(n_clusters=5, affinity='precomputed', linkage='average').fit(dist)
 #
 unique_labels = np.unique(cluster.labels_)
-rep_s = list()
+rep_s = []
 for label in unique_labels:
     idx = np.where(cluster.labels_==label)[0]
     #
@@ -131,13 +116,11 @@ for label in unique_labels:
     rep_s.append((score_s[idx][Emin_idx], os.path.abspath(model)))
 rep_s.sort(reverse=True)
 
-i_model = 0
-modelQ_dat = list()
-for score, pdb in rep_s:
-    i_model += 1
+modelQ_dat = []
+for i_model, (score, pdb) in enumerate(rep_s, start=1):
     os.system("ln -sf %s %s/model_%d.pdb"%(pdb, outfolder, i_model))
     #
-    dat = np.load(pdb[:-4] + ".npz")
+    dat = np.load(f"{pdb[:-4]}.npz")
     esto = dat['estogram'].astype(np.float32) + 1e-9
     mask = dat['mask'].astype(np.float32) + 1e-9
     #esto = esto.transpose(1,2,0)
@@ -156,5 +139,5 @@ for score, pdb in rep_s:
     #
     modelQ_dat.append("model_%d     %.4f   %s"%(i_model, score, os.path.realpath(pdb)))
 
-with open("%s/modelQ.dat"%outfolder, 'wt') as fp:
+with open(f"{outfolder}/modelQ.dat", 'wt') as fp:
     fp.write("\n".join(modelQ_dat))

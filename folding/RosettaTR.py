@@ -19,7 +19,7 @@ def main():
 
     # read params
     scriptdir = os.path.dirname(os.path.realpath(__file__))
-    with open(scriptdir + '/data/params.json') as jsonfile:
+    with open(f'{scriptdir}/data/params.json') as jsonfile:
         params = json.load(jsonfile)
 
     # get command line arguments
@@ -29,12 +29,13 @@ def main():
         return
 
     # init PyRosetta
-    init_cmd = list()
-    init_cmd.append("-multithreading:interaction_graph_threads 1 -multithreading:total_threads 1")
-    init_cmd.append("-hb_cen_soft")
-    init_cmd.append("-detect_disulf -detect_disulf_tolerance 2.0") # detect disulfide bonds based on Cb-Cb distance (CEN mode) or SG-SG distance (FA mode)
-    init_cmd.append("-relax:dualspace true -relax::minimize_bond_angles -default_max_cycles 200")
-    init_cmd.append("-mute all")
+    init_cmd = [
+        "-multithreading:interaction_graph_threads 1 -multithreading:total_threads 1",
+        "-hb_cen_soft",
+        "-detect_disulf -detect_disulf_tolerance 2.0",
+        "-relax:dualspace true -relax::minimize_bond_angles -default_max_cycles 200",
+        "-mute all",
+    ]
     init(" ".join(init_cmd))
 
     # read and process restraints & sequence
@@ -47,16 +48,16 @@ def main():
     # Scoring functions and movers
     ########################################################
     sf = ScoreFunction()
-    sf.add_weights_from_file(scriptdir + '/data/scorefxn.wts')
+    sf.add_weights_from_file(f'{scriptdir}/data/scorefxn.wts')
 
     sf1 = ScoreFunction()
-    sf1.add_weights_from_file(scriptdir + '/data/scorefxn1.wts')
+    sf1.add_weights_from_file(f'{scriptdir}/data/scorefxn1.wts')
 
     sf_vdw = ScoreFunction()
-    sf_vdw.add_weights_from_file(scriptdir + '/data/scorefxn_vdw.wts')
+    sf_vdw.add_weights_from_file(f'{scriptdir}/data/scorefxn_vdw.wts')
 
     sf_cart = ScoreFunction()
-    sf_cart.add_weights_from_file(scriptdir + '/data/scorefxn_cart.wts')
+    sf_cart.add_weights_from_file(f'{scriptdir}/data/scorefxn_cart.wts')
 
     mmap = MoveMap()
     mmap.set_bb(True)
@@ -74,7 +75,9 @@ def main():
     min_mover_cart.cartesian(True)
 
 
-    if not os.path.exists("%s_before_relax.pdb"%('.'.join(args.OUT.split('.')[:-1]))): 
+    if not os.path.exists(
+        f"{'.'.join(args.OUT.split('.')[:-1])}_before_relax.pdb"
+    ): 
         ########################################################
         # initialize pose
         ########################################################
@@ -109,7 +112,7 @@ def main():
             sf.set_weight(rosetta.core.scoring.atom_pair_constraint, rsr_dist_weight.setdefault(run, 1.0))
             sf.set_weight(rosetta.core.scoring.dihedral_constraint, rsr_orient_weight.setdefault(run, 0.5))
             sf.set_weight(rosetta.core.scoring.angle_constraint, rsr_orient_weight.setdefault(run, 0.5))
-            
+
             min_mover = MinMover(mmap, sf, 'lbfgs_armijo_nonmonotone', 0.001, True)
             min_mover.max_iter(1000)
 
@@ -131,7 +134,7 @@ def main():
 
                 # remove clashes
                 remove_clash(sf_vdw, min_mover_vdw, pose)
-            
+
             # Save checkpoint
             if args.save_chk:
                 pose.dump_pdb("%s_run%d_init.pdb"%('.'.join(args.OUT.split('.')[:-1]), run))
@@ -255,10 +258,12 @@ def main():
 
         # Save checkpoint
         if args.save_chk:
-            pose0.dump_pdb("%s_before_relax.pdb"%'.'.join(args.OUT.split('.')[:-1]))
+            pose0.dump_pdb(f"{'.'.join(args.OUT.split('.')[:-1])}_before_relax.pdb")
 
     else: # checkpoint exists
-        pose0 = pose_from_file("%s_before_relax.pdb"%('.'.join(args.OUT.split('.')[:-1])))
+        pose0 = pose_from_file(
+            f"{'.'.join(args.OUT.split('.')[:-1])}_before_relax.pdb"
+        )
         #
         print ("to centroid")
         switch_cen = SwitchResidueTypeSetMover("centroid")
@@ -285,23 +290,25 @@ def main():
         mmap.set_bb(True)
         mmap.set_chi(True)
         mmap.set_jump(True)
-        
+
         # First round: Repeat 2 torsion space relax w/ strong disto/anglogram constraints
         sf_fa_round1 = create_score_function('ref2015_cart')
         sf_fa_round1.set_weight(rosetta.core.scoring.atom_pair_constraint, 3.0)
         sf_fa_round1.set_weight(rosetta.core.scoring.dihedral_constraint, 1.0)
         sf_fa_round1.set_weight(rosetta.core.scoring.angle_constraint, 1.0)
         sf_fa_round1.set_weight(rosetta.core.scoring.pro_close, 0.0)
-        
-        relax_round1 = rosetta.protocols.relax.FastRelax(sf_fa_round1, "%s/data/relax_round1.txt"%scriptdir)
+
+        relax_round1 = rosetta.protocols.relax.FastRelax(
+            sf_fa_round1, f"{scriptdir}/data/relax_round1.txt"
+        )
         relax_round1.set_movemap(mmap)
-        
+
         print('relax: First round... (focused on torsion space relaxation)')
         params['PCUT'] = 0.15
         pose0.remove_constraints()
         add_rst(pose0, rst, 3, len(seq), params, nogly=True, use_orient=True)
         relax_round1.apply(pose0)
-       
+
         # Set options for disulfide tolerance -> 0.5A
         print (rosetta.basic.options.get_real_option('in:detect_disulf_tolerance'))
         rosetta.basic.options.set_real_option('in:detect_disulf_tolerance', 0.5)
@@ -311,8 +318,10 @@ def main():
         sf_fa.set_weight(rosetta.core.scoring.atom_pair_constraint, 0.1)
         sf_fa.set_weight(rosetta.core.scoring.dihedral_constraint, 0.0)
         sf_fa.set_weight(rosetta.core.scoring.angle_constraint, 0.0)
-        
-        relax_round2 = rosetta.protocols.relax.FastRelax(sf_fa, "%s/data/relax_round2.txt"%scriptdir)
+
+        relax_round2 = rosetta.protocols.relax.FastRelax(
+            sf_fa, f"{scriptdir}/data/relax_round2.txt"
+        )
         relax_round2.set_movemap(mmap)
         relax_round2.cartesian(True)
         relax_round2.dualspace(True)

@@ -31,17 +31,15 @@ def make_graph(node, idx, emb):
     sep = idx[:,None,:] - idx[:,:,None]
     sep = sep.abs()
     b, i, j = torch.where(sep > 0)
-    
+
     src = b*L+i
     tgt = b*L+j
 
     x = node.reshape(B*L, -1)
 
-    G = Data(x=x, 
-             edge_index=torch.stack([src,tgt]),
-             edge_attr=emb[b,i,j])
-
-    return G
+    return Data(
+        x=x, edge_index=torch.stack([src, tgt]), edge_attr=emb[b, i, j]
+    )
 
 class UniMPBlock(nn.Module):
     '''https://arxiv.org/pdf/2009.03509.pdf'''

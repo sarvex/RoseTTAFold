@@ -25,7 +25,7 @@ class FileSystemMutex:
         '''
         self.handle = open(self.filename, 'w')
         fcntl.lockf(self.handle, fcntl.LOCK_EX)
-        self.handle.write("{}\n".format(os.getpid()))
+        self.handle.write(f"{os.getpid()}\n")
         self.handle.flush()
 
     def release(self):

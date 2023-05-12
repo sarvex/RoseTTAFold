@@ -15,25 +15,6 @@ script_dir = '/'.join(os.path.dirname(os.path.realpath(__file__)).split('/')[:-1
 
 NBIN = [37, 37, 37, 19]
 
-MODEL_PARAM ={
-        "n_module"     : 8,
-        "n_module_str" : 4,
-        "n_layer"      : 1,
-        "d_msa"        : 384 ,
-        "d_pair"       : 288,
-        "d_templ"      : 64,
-        "n_head_msa"   : 12,
-        "n_head_pair"  : 8,
-        "n_head_templ" : 4,
-        "d_hidden"     : 64,
-        "r_ff"         : 4,
-        "n_resblock"   : 1,
-        "p_drop"       : 0.1,
-        "use_templ"    : True,
-        "performer_N_opts": {"nb_features": 64},
-        "performer_L_opts": {"nb_features": 64}
-        }
-
 SE3_param = {
         "num_layers"    : 2,
         "num_channels"  : 16,
@@ -46,12 +27,30 @@ SE3_param = {
         "div": 2,
         "n_heads": 4
         }
-MODEL_PARAM['SE3_param'] = SE3_param
+MODEL_PARAM = {
+    "n_module": 8,
+    "n_module_str": 4,
+    "n_layer": 1,
+    "d_msa": 384,
+    "d_pair": 288,
+    "d_templ": 64,
+    "n_head_msa": 12,
+    "n_head_pair": 8,
+    "n_head_templ": 4,
+    "d_hidden": 64,
+    "r_ff": 4,
+    "n_resblock": 1,
+    "p_drop": 0.1,
+    "use_templ": True,
+    "performer_N_opts": {"nb_features": 64},
+    "performer_L_opts": {"nb_features": 64},
+    'SE3_param': SE3_param,
+}
 
 class Predictor():
     def __init__(self, model_dir=None, use_cpu=False):
-        if model_dir == None:
-            self.model_dir = "%s/models"%(os.path.dirname(os.path.realpath(__file__)))
+        if model_dir is None:
+            self.model_dir = f"{os.path.dirname(os.path.realpath(__file__))}/models"
         else:
             self.model_dir = model_dir
         #
@@ -71,7 +70,7 @@ class Predictor():
             sys.exit()
 
     def load_model(self, model_name, suffix='pyrosetta'):
-        chk_fn = "%s/%s_%s.pt"%(self.model_dir, model_name, suffix)
+        chk_fn = f"{self.model_dir}/{model_name}_{suffix}.pt"
         if not os.path.exists(chk_fn):
             return False
         checkpoint = torch.load(chk_fn, map_location=self.device)
@@ -88,7 +87,7 @@ class Predictor():
             xyz_t = torch.full((1, L, 3, 3), np.nan).float()
             t1d = torch.zeros((1, L, 3)).float()
             t0d = torch.zeros((1,3)).float()
-       
+
         self.model.eval()
         with torch.no_grad():
             #
@@ -122,7 +121,7 @@ class Predictor():
                         sel = np.zeros((L)).astype(np.bool)
                         sel[start_1:end_1] = True
                         sel[start_2:end_2] = True
-                       
+
                         input_msa = msa[:,:,sel]
                         mask = torch.sum(input_msa==20, dim=-1) < 0.5*sel.sum() # remove too gappy sequences
                         input_msa = input_msa[mask].unsqueeze(0)
@@ -156,23 +155,30 @@ class Predictor():
                 t1d = t1d.to(self.device)
                 t2d = t2d.to(self.device)
                 logit_s, init_crds, pred_lddt = self.model(msa, seq, idx_pdb, t1d=t1d, t2d=t2d)
-                prob_s = list()
+                prob_s = []
                 for logit in logit_s:
                     prob = self.active_fn(logit.float()) # distogram
                     prob = prob.reshape(-1, L, L).permute(1,2,0).cpu().numpy()
                     prob_s.append(prob)
-        
-        np.savez_compressed("%s.npz"%out_prefix, dist=prob_s[0].astype(np.float16), \
-                            omega=prob_s[1].astype(np.float16),\
-                            theta=prob_s[2].astype(np.float16),\
-                            phi=prob_s[3].astype(np.float16))
+
+        np.savez_compressed(
+            f"{out_prefix}.npz",
+            dist=prob_s[0].astype(np.float16),
+            omega=prob_s[1].astype(np.float16),
+            theta=prob_s[2].astype(np.float16),
+            phi=prob_s[3].astype(np.float16),
+        )
                     
 
 def get_args():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", dest="model_dir", default="%s/weights"%(script_dir),
-                        help="Path to pre-trained network weights [%s/weights]"%script_dir)
+    parser.add_argument(
+        "-m",
+        dest="model_dir",
+        default=f"{script_dir}/weights",
+        help=f"Path to pre-trained network weights [{script_dir}/weights]",
+    )
     parser.add_argument("-i", dest="a3m_fn", required=True,
                         help="Input multiple sequence alignments (in a3m format)")
     parser.add_argument("-o", dest="out_prefix", required=True,
@@ -181,20 +187,23 @@ def get_args():
                         help="HHsearch output file (hhr file). If not provided, zero matrices will be given as templates")
     parser.add_argument("--atab", default=None,
                         help="HHsearch output file (atab file)")
-    parser.add_argument("--db", default="%s/pdb100_2021Mar03/pdb100_2021Mar03"%script_dir,
-                        help="Path to template database [%s/pdb100_2021Mar03]"%script_dir)
+    parser.add_argument(
+        "--db",
+        default=f"{script_dir}/pdb100_2021Mar03/pdb100_2021Mar03",
+        help=f"Path to template database [{script_dir}/pdb100_2021Mar03]",
+    )
     parser.add_argument("--cpu", dest='use_cpu', default=False, action='store_true')
 
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 if __name__ == "__main__":
     args = get_args()
     FFDB=args.db
     FFindexDB = namedtuple("FFindexDB", "index, data")
-    ffdb = FFindexDB(read_index(FFDB+'_pdb.ffindex'),
-                     read_data(FFDB+'_pdb.ffdata'))
+    ffdb = FFindexDB(
+        read_index(f'{FFDB}_pdb.ffindex'), read_data(f'{FFDB}_pdb.ffdata')
+    )
 
-    if not os.path.exists("%s.npz"%args.out_prefix):
+    if not os.path.exists(f"{args.out_prefix}.npz"):
         pred = Predictor(model_dir=args.model_dir, use_cpu=args.use_cpu)
         pred.predict(args.a3m_fn, args.out_prefix, args.hhr, args.atab)

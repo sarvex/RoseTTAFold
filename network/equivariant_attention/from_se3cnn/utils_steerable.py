@@ -21,9 +21,7 @@ def get_matrix_kernel(A, eps=1e-10):
     '''
     _u, s, v = torch.svd(A)
 
-    # A = u @ torch.diag(s) @ v.t()
-    kernel = v.t()[s < eps]
-    return kernel
+    return v.t()[s < eps]
 
 
 def get_matrices_kernel(As, eps=1e-10):
@@ -33,8 +31,8 @@ def get_matrices_kernel(As, eps=1e-10):
     return get_matrix_kernel(torch.cat(As, dim=0), eps)
 
 
-@cached_dirpklgz("%s/cache/trans_Q"%os.path.dirname(os.path.realpath(__file__)))
-def _basis_transformation_Q_J(J, order_in, order_out, version=3):  # pylint: disable=W0613
+@cached_dirpklgz(f"{os.path.dirname(os.path.realpath(__file__))}/cache/trans_Q")
+def _basis_transformation_Q_J(J, order_in, order_out, version=3):    # pylint: disable=W0613
     """
     :param J: order of the spherical harmonics
     :param order_in: order of the input representation
@@ -281,14 +279,17 @@ def precompute_sh(r_ij, max_J):
     i_alpha = 1
     i_beta = 2
 
-    Y_Js = {}
     sh = SphericalHarmonics()
 
-    for J in range(max_J+1):
-        # dimension [B,N,K,2J+1]
-        #Y_Js[J] = spherical_harmonics(order=J, alpha=r_ij[...,i_alpha], beta=r_ij[...,i_beta])
-        Y_Js[J] = sh.get(J, theta=math.pi-r_ij[...,i_beta], phi=r_ij[...,i_alpha], refresh=False)
-
+    Y_Js = {
+        J: sh.get(
+            J,
+            theta=math.pi - r_ij[..., i_beta],
+            phi=r_ij[..., i_alpha],
+            refresh=False,
+        )
+        for J in range(max_J + 1)
+    }
     sh.clear()
     return Y_Js
 
@@ -317,10 +318,7 @@ class ScalarActivation3rdDim(torch.nn.Module):
 
         assert len(np.array(input.shape)) == 3
 
-        if self.bias is not None:
-            x = input + self.bias.view(1, 1, -1)
-        else:
-            x = input
+        x = input + self.bias.view(1, 1, -1) if self.bias is not None else input
         x = self.activation(x)
 
         return x

@@ -52,13 +52,9 @@ def lpmv(l, m, x):
 
     # Compute P_m^m
     yold = ((-1)**m_abs * semifactorial(2*m_abs-1)) * torch.pow(1-x*x, m_abs/2)
-    
-    # Compute P_{m+1}^m
-    if m_abs != l:
-        y = x * (2*m_abs+1) * yold
-    else:
-        y = yold
 
+    # Compute P_{m+1}^m
+    y = x * (2*m_abs+1) * yold if m_abs != l else yold
     # Compute P_{l}^m from recursion in P_{l-1}^m and P_{l-2}^m
     for i in range(m_abs+2, l+1):
         tmp = y
@@ -198,11 +194,9 @@ class SphericalHarmonics(object):
         Returns:
             tensor of shape [*theta.shape, 2*l+1]
         """
-        results = []
         if refresh:
             self.clear()
-        for m in range(-l, l+1):
-            results.append(self.get_element(l, m, theta, phi))
+        results = [self.get_element(l, m, theta, phi) for m in range(-l, l+1)]
         return torch.stack(results, -1)
 
 

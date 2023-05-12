@@ -113,16 +113,14 @@ class RoseTTAFoldModule_e2e(nn.Module):
 
             # Predict 6D coords
             logits = self.c6d_predictor(pair)
-            
-            prob_s = list()
-            for l in logits:
-                prob_s.append(nn.Softmax(dim=1)(l)) # (B, C, L, L)
+
+            prob_s = [nn.Softmax(dim=1)(l) for l in logits]
             prob_s = torch.cat(prob_s, dim=1).permute(0,2,3,1)
-        
+
         B, L = msa.shape[:2]
         if return_raw:
             return logits, msa, xyz, lddt.view(B, L)
-        
+
         ref_xyz, ref_lddt = self.refine(msa, prob_s, seq1hot, idx)
 
         if refine_only:

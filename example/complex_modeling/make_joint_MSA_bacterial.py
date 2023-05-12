@@ -29,19 +29,15 @@ def read_a3m(fn):
                 is_incl = False
                 continue
             lab.append(code)
-        else:
-            if is_incl:
-                seq.append(line.rstrip())
-            else:
-                continue
-
+        elif is_incl:
+            seq.append(line.rstrip())
     return seq, lab
 
 # https://www.uniprot.org/help/accession_numbers
 def uni2idx(ids):
     '''convert uniprot ids into integers according to the structure
     of uniprot accession numbers'''
-    ids2 = [i+'AAA0' if len(i)==6 else i for i in ids]
+    ids2 = [f'{i}AAA0' if len(i)==6 else i for i in ids]
     arr = np.array([list(s) for s in ids2], dtype='|S1').view(np.uint8)
 
     for i in [1,5,9]:

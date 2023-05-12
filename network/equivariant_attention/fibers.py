@@ -66,10 +66,7 @@ class Fiber(object):
     def combine_max(f1, f2):
         new_dict = copy.deepcopy(f1.structure_dict)
         for k, m in f2.structure_dict.items():
-            if k in new_dict.keys():
-                new_dict[k] = max(m, new_dict[k])
-            else:
-                new_dict[k] = m
+            new_dict[k] = max(m, new_dict[k]) if k in new_dict.keys() else m
         structure = [(new_dict[k], k) for k in sorted(new_dict.keys())]
         return Fiber(structure=structure)
 

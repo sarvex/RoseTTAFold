@@ -15,11 +15,10 @@ from .dataProcessingUtils import *
 def get_hbonds(pose):  
     hb_srbb = []
     hb_lrbb = []
-    
+
     hbond_set = pose.energies().data().get(pyrosetta.rosetta.core.scoring.EnergiesCacheableDataType.HBOND_SET)
     for i in range(1, hbond_set.nhbonds()):
-        hb = hbond_set.hbond(i)
-        if hb:
+        if hb := hbond_set.hbond(i):
             acceptor = hb.acc_res()
             donor = hb.don_res()
             wtype = pyrosetta.rosetta.core.scoring.hbonds.get_hbond_weight_type(hb.eval_type())
@@ -33,7 +32,7 @@ def get_hbonds(pose):
                     hb_srbb.append((acceptor, donor, energy))
                 elif wtype == pyrosetta.rosetta.core.scoring.hbonds.hbw_LR_BB:
                     hb_lrbb.append((acceptor, donor, energy))
-                
+
     return hb_srbb, hb_lrbb
 
 # In: pose, Out: distance maps with different atoms
@@ -46,22 +45,21 @@ def extract_multi_distance_map(pose):
     x3 = get_distmaps(pose, atom1="CA", atom2=dict_3LAA_to_tip)
     # Get Tip to CA distancemap
     x4 = get_distmaps(pose, atom1=dict_3LAA_to_tip, atom2="CA")
-    output = np.stack([x1,x2,x3,x4], axis=-1)
-    return output
+    return np.stack([x1,x2,x3,x4], axis=-1)
 
 # In: pose, Out: (3d-matrix with 2d energies and cb-distmap, aa sequences) 
 def extract_EnergyDistM(pose, energy_terms):
 
     # Get the number of residues in the protein.
     length = int(pose.total_residue())
-    
+
     # Prepare distance matrix
     tensor = np.zeros((1+len(energy_terms)+2, length, length))
-    
+
     # Obtain energy graph
     energies = pose.energies()
     graph = energies.energy_graph()
-    
+
     ######################################
     # Fill the dist_matrix with energies #
     ######################################
@@ -69,47 +67,49 @@ def extract_EnergyDistM(pose, energy_terms):
     for i in range(length):
         index1 = i + 1
         aas.append(pose.residue(index1).name().split(":")[0].split("_")[0])
-        
+
         # Get an edge iterator
         iru = graph.get_node(index1).const_edge_list_begin()
         irue = graph.get_node(index1).const_edge_list_end()
-        
+
         # Parse the energy graph.
         while iru!=irue:
             # Dereference the pointer and get the other end.
             edge = iru.__mul__()
-            
+
             # Evaluate energy edge and get energy values
             evals = [edge[e] for e in energy_terms]
             index2 = edge.get_other_ind(index1)
-            
+
             count = 1
             for k in range(len(evals)):
                 e = evals[k]
                 t = energy_terms[k]
-                
+
                 # For hbond_bb_sc and hbond_sc, just note the presence
-                if t == pyrosetta.rosetta.core.scoring.ScoreType.hbond_bb_sc or t == pyrosetta.rosetta.core.scoring.ScoreType.hbond_sc:
+                if t in [
+                    pyrosetta.rosetta.core.scoring.ScoreType.hbond_bb_sc,
+                    pyrosetta.rosetta.core.scoring.ScoreType.hbond_sc,
+                ]:
                     if e != 0.0:
                         tensor[count, index1-1, index2-1] = 1
-                # Otherwise record the original values.
                 else:
                     tensor[count, index1-1, index2-1] = e
-                    
+
                 count += 1
             # Move pointer
             iru.plus_plus()
-    
+
     #########################################
     # Simple transformation of energy terms #
     #########################################
     for i in range(1, 1+len(evals)):
         temp = tensor[i]
-        if i == 1 or i == 2:
+        if i in [1, 2]:
             tensor[i] = np.arcsinh(np.abs(temp))/3.0
-        elif i == 3 or i==4 or i==5:
+        elif i in [3, 4, 5]:
             tensor[i] = np.tanh(temp)
-            
+
     #############################################
     # Use CB idstance (CA if CB does not exist) #
     # to calculate distance between residues    #
@@ -128,9 +128,9 @@ def extract_EnergyDistM(pose, energy_terms):
             else:
                 vector2 = pose.residue(index2).xyz("CA")
             distance = vector1.distance(vector2)
-            
+
             tensor[0, index1-1, index2-1] = distance #1-sigmoid(displacement, scale=10, offset=-5)
-    
+
     ##################################
     # Fill in the hbonds information #
     ##################################
@@ -144,7 +144,7 @@ def extract_EnergyDistM(pose, energy_terms):
         index1 = hb[0]
         index2 = hb[1]
         tensor[count, index1-1, index2-1] = 1
-        
+
     return tensor, aas
 
 def extract_AAs_properties_ver1(aas):
@@ -277,7 +277,7 @@ def set_neighbors3D(pdict):
         rname = r.name()[:3]
         for j in range(1,r.natoms()+1):
             aname = r.atom_name(j).strip()
-            name = rname+'_'+aname
+            name = f'{rname}_{aname}'
             if not r.atom_is_hydrogen(j) and aname != 'NV' and aname != 'OXT' and name in atypes:
                 xyz.append(r.atom(j).xyz())
                 types.append(atypes[name])
@@ -308,17 +308,17 @@ def set_neighbors3D(pdict):
 
     # bin size
     h = width / (nbins-1)
-    
+
     # shift all contacts to the center of the box
     # and scale the coordinates by h
     xyz = (xyz_new + 0.5 * width) / h
 
     # residue indices
     i = idx[:,0].astype(dtype=np.int16).reshape((N,1))
-    
+
     # atom types
     t = idx[:,2].astype(dtype=np.int16).reshape((N,1))
-    
+
     # discretized x,y,z coordinates
     klm = np.floor(xyz).astype(dtype=np.int16)
 
@@ -329,7 +329,7 @@ def set_neighbors3D(pdict):
     klm0 = np.array(klm[:,0]).reshape((N,1))
     klm1 = np.array(klm[:,1]).reshape((N,1))
     klm2 = np.array(klm[:,2]).reshape((N,1))
-    
+
     V000 = np.array(d[:,0] * d[:,1] * d[:,2]).reshape((N,1))
     V100 = np.array((1-d[:,0]) * d[:,1] * d[:,2]).reshape((N,1))
     V010 = np.array(d[:,0] * (1-d[:,1]) * d[:,2]).reshape((N,1))
@@ -351,10 +351,10 @@ def set_neighbors3D(pdict):
     a111 = np.hstack([i, klm0+1, klm1+1, klm2+1, t, V000])
 
     a = np.vstack([a000, a100, a010, a110, a001, a101, a011, a111])
-    
+
     # make sure projected contacts fit into the box
     b = a[(np.min(a[:,1:4],axis=-1) >= 0) & (np.max(a[:,1:4],axis=-1) < nbins) & (a[:,5]>1e-5)]
-    
+
     pdict['idx'] = b[:,:5].astype(np.uint16)
     pdict['val'] = b[:,5].astype(np.float16)
 
@@ -435,20 +435,17 @@ def energy_string_to_dict(energy_string):
     return energy_dict
 
 def remove_nonzero_scores(energy_dict):
-    # given an energy_dict
-    # returns an energy_dict with trivial scores removed
-    result = {}
-    for score_term in energy_dict:
-        if energy_dict[score_term] != 0:
-            result[score_term] = energy_dict[score_term]
-    return result
+    return {
+        score_term: energy_dict[score_term]
+        for score_term in energy_dict
+        if energy_dict[score_term] != 0
+    }
 
 def get_energy_string_quick(energy_obj, res_pos):
     # given an energy_obj and a residue position
     # returns an energy_string
     res_energies = energy_obj.residue_total_energies(res_pos)
-    energy_string = str(res_energies)
-    return energy_string
+    return str(res_energies)
 
 def get_one_body_score_terms(pose, scorefxn, score_terms):
     # GIVEN: a pose, a score function, and a list of score terms
@@ -463,9 +460,7 @@ def get_one_body_score_terms(pose, scorefxn, score_terms):
     for pos in range(1, len(pose.sequence()) + 1):
         energy_string = get_energy_string_quick(energy_obj, pos)
         energy_dict = energy_string_to_dict(energy_string)
-        res_scores = []
-        for term in score_terms:
-            res_scores.append(energy_dict[term])
+        res_scores = [energy_dict[term] for term in score_terms]
         one_body_score_terms.append(res_scores)
     return np.array(one_body_score_terms).T
 
@@ -495,7 +490,6 @@ def get_bond_lengths_and_angles(mypose,k):
     # CA(k)-C(k)-N(k+1) (except for C-term)
     # not sure whether to record C(k)-N(k+1)-CA(k+1) or C(k-1)-N(k)-CA(k)
     seqlen = len(mypose.sequence())
-    result_dict = {}
     # gather xyz coords of all relevant atoms
     if k > 1:
         C_prev = mypose.residue(k-1).xyz("C")
@@ -513,7 +507,7 @@ def get_bond_lengths_and_angles(mypose,k):
         CcNn = N_next - C_curr
     # get relevant bond lengths
     NcCAc_len = NcCAc.norm()
-    result_dict["NcCAc_len"] = NcCAc_len
+    result_dict = {"NcCAc_len": NcCAc_len}
     CAcCc_len = CAcCc.norm()
     result_dict["CAcCc_len"] = CAcCc_len
     if k < seqlen:
@@ -542,15 +536,13 @@ def get_feature_matrix(mypose, padval=0):
     column_names = ["NcCAc_len", "CAcCc_len", "CcNn_len", "CpNcCAc", "NcCAcCc", "CAcCcNn"]
     for res_pos in range(1,len(mypose.sequence())+1):
         feature_dict = get_bond_lengths_and_angles(mypose,res_pos)
-        data_row = []
         # "zero padding"
         if res_pos == 1:
             feature_dict["CpNcCAc"] = padval
         if res_pos == len(mypose.sequence()):
             feature_dict["CcNn_len"] = padval
             feature_dict["CAcCcNn"] = padval
-        for feature in column_names:
-            data_row.append(feature_dict[feature])
+        data_row = [feature_dict[feature] for feature in column_names]
         result.append(data_row)
     return np.array(result).T
 
@@ -594,8 +586,7 @@ def extractOneBodyTerms(pose, padval=0):
     return np.concatenate([bond_angles_lengths_mat, energy_term_mat, SS_mat]), features2+score_terms+["E", "L", "H"]
 
 def init_pose(pose):
-    pdict = {}
-    pdict['pose'] = pose
+    pdict = {'pose': pose}
     pdict['nres'] = pyrosetta.rosetta.core.pose.nres_protein(pdict['pose'])
     pdict['N'], pdict['Ca'], pdict['C'], pdict['Cb'] = get_coords(pdict['pose'])
     set_lframe(pdict)
@@ -614,7 +605,7 @@ def process(args):
         score = fa_scorefxn(pose)
 
         pdict = init_pose(pose)
-        
+
         maps = extract_multi_distance_map(pose)
         _2df, aas = extract_EnergyDistM(pose, energy_terms)
         _1df, _ = extractOneBodyTerms(pose)
@@ -632,6 +623,10 @@ def process(args):
             obt = _1df,
             prop = prop,
             maps = maps)
-        if verbose: print("Processed "+filename+" (%0.2f seconds)" % (time.time() - start_time))
+        if verbose:
+            print(
+                f"Processed {filename}"
+                + " (%0.2f seconds)" % (time.time() - start_time)
+            )
     except Exception as inst:
-        print("While processing", outfile+":", inst)
+        print("While processing", f"{outfile}:", inst)

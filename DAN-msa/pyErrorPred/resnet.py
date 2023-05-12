@@ -97,9 +97,9 @@ def build_resnet(_input,
                                   kernel_size=(1,1),
                                   dilation_rate=(1,1),
                                   data_format=data_format)
-    
+
     # each chunk contatins 4 blocks with cycling dilation rates.
-    for i in range(num_chunks):
+    for _ in range(num_chunks):
         # dilation rates
         for dr in dilation_cycle:
             # save residual connection
@@ -116,11 +116,11 @@ def build_resnet(_input,
             _input = _residual+_conved
             if transpose_matrix:
                 _input = (_input+tf.transpose(_input, [0,2,1,3]))/2
-            
-    
+
+
     # 2 more extra blocks with dilation
     if no_last_dilation:
-        for i in range(2):
+        for _ in range(2):
             _residual = _input
             # pass through resnet block
             _conved = resnet_block(_input,
@@ -134,5 +134,5 @@ def build_resnet(_input,
             _input = _residual+_conved
             if transpose_matrix:
                 _input = (_input+tf.transpose(_input, [0,2,1,3]))/2
-            
+
     return _input

@@ -10,22 +10,16 @@ def get_distmap_deprecated(pose, atom1="CA", atom2="CA", default="CA"):
         for j in range(1, pose.size()+1):
             r = pose.residue(i)
             if type(atom1) == str:
-                if r.has(atom1):
-                    p1 = np.array(r.xyz(atom1))
-                else:
-                    p1 = np.array(r.xyz(default))
+                p1 = np.array(r.xyz(atom1)) if r.has(atom1) else np.array(r.xyz(default))
             else:
                 p1 = np.array(r.xyz(atom1.get(r.name(), default)))
-                
+
             r = pose.residue(j)
             if type(atom2) == str:
-                if r.has(atom2):
-                    p2 = np.array(r.xyz(atom2))
-                else:
-                    p2 = np.array(r.xyz(default))
+                p2 = np.array(r.xyz(atom2)) if r.has(atom2) else np.array(r.xyz(default))
             else:
                 p2 = np.array(r.xyz(atom2.get(r.name(), default)))
-                
+
             dist = distance.euclidean(p1,p2)
             out[i-1, j-1] = dist
     return out
@@ -69,8 +63,7 @@ def getTorsions(pose):
 # Gets sequence given a pose
 def get_sequence(pose):
     p = pose
-    seq=[p.residue(i).name() for i in range(1,p.size()+1)]
-    return seq
+    return [p.residue(i).name() for i in range(1,p.size()+1)]
 
 # Get euler angles of pairs of residues
 def getEulerOrientation(pose):
@@ -83,14 +76,12 @@ def getEulerOrientation(pose):
             rt6=pyrosetta.rosetta.core.scoring.motif.get_residue_pair_rt6(pose,i,pose,j)
             trans_z[i-1][j-1] = np.array([rt6[1],rt6[2],rt6[3]])
             rot_z[i-1][j-1] = np.array([rt6[4],rt6[5],rt6[6]])
-    
+
     # Conversion to radian space
     trans_z = np.deg2rad(trans_z)
     rot_z = np.deg2rad(rot_z)
-    
-    # Getting sin and consine of respective angles
-    output = np.concatenate([trans_z, rot_z], axis=2)
-    return output
+
+    return np.concatenate([trans_z, rot_z], axis=2)
 
 # Given a pose and scorefunction, returns one body and two body terms of totalE.
 def getEnergy(p, scorefxn):

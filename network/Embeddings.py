@@ -23,9 +23,7 @@ class PositionalEncoding(nn.Module):
         pe = pe.unsqueeze(0)
         self.register_buffer('pe', pe) # (1, max_len, d_model)
     def forward(self, x, idx_s):
-        pe = list()
-        for idx in idx_s:
-            pe.append(self.pe[:,idx,:])
+        pe = [self.pe[:,idx,:] for idx in idx_s]
         pe = torch.stack(pe)
         x = x + torch.autograd.Variable(pe, requires_grad=False)
         return self.drop(x)
@@ -44,9 +42,7 @@ class PositionalEncoding2D(nn.Module):
         B, L, _, K = x.shape
         K_half = K//2
         pe = torch.zeros_like(x)
-        i_batch = -1
-        for idx in idx_s:
-            i_batch += 1
+        for i_batch, idx in enumerate(idx_s):
             sin_inp = idx.unsqueeze(1) * self.div_term
             emb = torch.cat((sin_inp.sin(), sin_inp.cos()), dim=-1) # (L, K//2)
             pe[i_batch,:,:,:K_half] = emb.unsqueeze(1)

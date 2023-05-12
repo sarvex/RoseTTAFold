@@ -68,20 +68,15 @@ def main():
         print(f"Only one output folder can be specified, but got {args.outfolder}", file=sys.stderr)
         return -1
 
-    if len(args.outfolder)==0:
-        args.outfolder = ""
-    else:
-        args.outfolder = args.outfolder[0]
-
-
+    args.outfolder = "" if len(args.outfolder)==0 else args.outfolder[0]
     if args.infolder.endswith('.pdb'):
         args.pdb = True
-    
+
     if not args.pdb:
         if not isdir(args.infolder):
             print("Input folder does not exist.", file=sys.stderr)
             return -1
-        
+
         #default is current folder
         if args.outfolder == "":
             args.outfolder='.'
@@ -92,24 +87,24 @@ def main():
         if not isfile(args.infolder):
             print("Input file does not exist.", file=sys.stderr)
             return -1
-        
+
         #default is output name with extension changed to npz
         if args.outfolder == "":
             args.outfolder = os.path.splitext(args.infolder)[0]+".npz"
 
-        if not(".pdb" in args.infolder and ".npz" in args.outfolder):
+        if ".pdb" not in args.infolder or ".npz" not in args.outfolder:
             print("Input needs to be in .pdb format, and output needs to be in .npz format.", file=sys.stderr)
             return -1
-            
-    
+
+
     script_dir = os.path.dirname(__file__)
     base = os.path.join(script_dir, "models/")
     modelpath = base + "smTr"
-        
+
     if not isdir(modelpath+"_rep1"):
         print("Model checkpoint does not exist", file=sys.stderr)
         return -1
-        
+
     ##############################
     # Importing larger libraries #
     ##############################
@@ -118,24 +113,19 @@ def main():
     script_dir = os.path.dirname(__file__)
     sys.path.insert(0, script_dir)
     import pyErrorPred
-        
-    num_process = 1
-    if args.process > 1:
-        num_process = args.process
-        
+
     #########################
     # Getting samples names #
     #########################
     if not args.pdb:
-        if args.prefix == None:
+        if args.prefix is None:
             samples = [i[:-4] for i in os.listdir(args.infolder) if isfile(args.infolder+"/"+i) and i[-4:] == ".pdb" and i[0]!="."]
-            ignored = [i[:-4] for i in os.listdir(args.infolder) if not(isfile(args.infolder+"/"+i) and i[-4:] == ".pdb" and i[0]!=".")]
         else:
             samples = [i[:-4] for i in os.listdir(args.infolder) if isfile(args.infolder+"/"+i) and i[-4:] == ".pdb" and i[0]!="." and args.prefix in i]
-            ignored = [i[:-4] for i in os.listdir(args.infolder) if not(isfile(args.infolder+"/"+i) and i[-4:] == ".pdb" and i[0]!=".")]
+        ignored = [i[:-4] for i in os.listdir(args.infolder) if not(isfile(args.infolder+"/"+i) and i[-4:] == ".pdb" and i[0]!=".")]
         if args.verbose: 
             print("# samples:", len(samples))
-            if len(ignored) > 0:
+            if ignored:
                 print("# files ignored:", len(ignored))
 
         ##############################
@@ -154,6 +144,7 @@ def main():
             if args.verbose: 
                 print("Featurizing", len(arguments), "samples.", len(already_processed), "are re-processed.")
 
+        num_process = max(args.process, 1)
         if num_process == 1:
             for a in arguments:
                 pyErrorPred.process(a)
@@ -165,7 +156,7 @@ def main():
         # Exit if only featurization is needed
         if args.featurize:
             return 0
-        
+
         ###########################
         # Prediction happens here #
         ###########################
@@ -184,8 +175,7 @@ def main():
             pyErrorPred.clean(samples,
                               args.outfolder,
                               verbose=args.verbose)
-            
-    # Processing for single sample
+
     else:
         infilepath = args.infolder
         outfilepath = args.outfolder
@@ -197,7 +187,7 @@ def main():
         if args.verbose: 
             print("only working on a file:", outfolder, outsamplename)
         # Process if file does not exists or reprocess flag is set
-        
+
         if (not isfile(feature_file_name)) or args.reprocess:
             pyErrorPred.process((join(infolder, insamplename+".pdb"),
                                 feature_file_name,
@@ -211,7 +201,7 @@ def main():
                     modelpath,
                     outfolder,
                     verbose=args.verbose)
-            
+
             if not args.leavetemp:
                 pyErrorPred.clean([outsamplename],
                                   outfolder,

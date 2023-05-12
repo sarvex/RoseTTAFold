@@ -16,26 +16,6 @@ script_dir = '/'.join(os.path.dirname(os.path.realpath(__file__)).split('/')[:-1
 
 NBIN = [37, 37, 37, 19]
 
-MODEL_PARAM ={
-        "n_module"     : 8,
-        "n_module_str" : 4,
-        "n_module_ref" : 4,
-        "n_layer"      : 1,
-        "d_msa"        : 384 ,
-        "d_pair"       : 288,
-        "d_templ"      : 64,
-        "n_head_msa"   : 12,
-        "n_head_pair"  : 8,
-        "n_head_templ" : 4,
-        "d_hidden"     : 64,
-        "r_ff"         : 4,
-        "n_resblock"   : 1,
-        "p_drop"       : 0.0,
-        "use_templ"    : True,
-        "performer_N_opts": {"nb_features": 64},
-        "performer_L_opts": {"nb_features": 64}
-        }
-
 SE3_param = {
         "num_layers"    : 2,
         "num_channels"  : 16,
@@ -61,16 +41,34 @@ REF_param = {
         "div": 4,
         "n_heads": 4
         }
-MODEL_PARAM['SE3_param'] = SE3_param
-MODEL_PARAM['REF_param'] = REF_param
-
+MODEL_PARAM = {
+    "n_module": 8,
+    "n_module_str": 4,
+    "n_module_ref": 4,
+    "n_layer": 1,
+    "d_msa": 384,
+    "d_pair": 288,
+    "d_templ": 64,
+    "n_head_msa": 12,
+    "n_head_pair": 8,
+    "n_head_templ": 4,
+    "d_hidden": 64,
+    "r_ff": 4,
+    "n_resblock": 1,
+    "p_drop": 0.0,
+    "use_templ": True,
+    "performer_N_opts": {"nb_features": 64},
+    "performer_L_opts": {"nb_features": 64},
+    'SE3_param': SE3_param,
+    'REF_param': REF_param,
+}
 # params for the folding protocol
 fold_params = {
     "SG7"     : np.array([[[-2,3,6,7,6,3,-2]]])/21,
     "SG9"     : np.array([[[-21,14,39,54,59,54,39,14,-21]]])/231,
     "DCUT"    : 19.5,
     "ALPHA"   : 1.57,
-    
+
     # TODO: add Cb to the motif
     "NCAC"    : np.array([[-0.676, -1.294,  0.   ],
                           [ 0.   ,  0.   ,  0.   ],
@@ -88,8 +86,8 @@ fold_params["SG"] = fold_params["SG9"]
 
 class Predictor():
     def __init__(self, model_dir=None, use_cpu=False):
-        if model_dir == None:
-            self.model_dir = "%s/models"%(os.path.dirname(os.path.realpath(__file__)))
+        if model_dir is None:
+            self.model_dir = f"{os.path.dirname(os.path.realpath(__file__))}/models"
         else:
             self.model_dir = model_dir
         #
@@ -105,7 +103,7 @@ class Predictor():
         self.model = RoseTTAFoldModule_e2e(**MODEL_PARAM).to(self.device)
 
     def load_model(self, model_name, suffix='e2e'):
-        chk_fn = "%s/%s_%s.pt"%(self.model_dir, model_name, suffix)
+        chk_fn = f"{self.model_dir}/{model_name}_{suffix}.pt"
         if not os.path.exists(chk_fn):
             return False
         checkpoint = torch.load(chk_fn, map_location=self.device)
@@ -132,7 +130,7 @@ class Predictor():
         t1d = t1d.float().unsqueeze(0)
         t0d = t0d.float().unsqueeze(0)
         t2d = xyz_to_t2d(xyz_t, t0d)
-       
+
         could_load = self.load_model(self.model_name, suffix="e2e")
         if not could_load:
             print ("ERROR: failed to load model")
@@ -161,7 +159,7 @@ class Predictor():
                         sel = np.zeros((L)).astype(np.bool)
                         sel[start_1:end_1] = True
                         sel[start_2:end_2] = True
-                       
+
                         input_msa = msa[:,:,sel]
                         mask = torch.sum(input_msa==20, dim=-1) < 0.5*sel.sum() # remove too gappy sequences
                         input_msa = input_msa[mask].unsqueeze(0)
@@ -213,25 +211,30 @@ class Predictor():
                 t2d = t2d[:,:10].to(self.device)
                 with torch.cuda.amp.autocast():
                     logit_s, _, xyz, lddt = self.model(msa, seq, idx_pdb, t1d=t1d, t2d=t2d)
-                prob_s = list()
+                prob_s = []
                 for logit in logit_s:
                     prob = self.active_fn(logit.float()) # distogram
                     prob = prob.reshape(-1, L, L).permute(1,2,0).cpu().numpy()
                     prob_s.append(prob)
-        
-        np.savez_compressed("%s.npz"%(out_prefix), dist=prob_s[0].astype(np.float16), \
-                            omega=prob_s[1].astype(np.float16),\
-                            theta=prob_s[2].astype(np.float16),\
-                            phi=prob_s[3].astype(np.float16))
-        
-        self.write_pdb(seq[0], xyz[0], idx_pdb[0], Bfacts=lddt[0], prefix="%s_init"%(out_prefix))
-        
+
+        np.savez_compressed(
+            f"{out_prefix}.npz",
+            dist=prob_s[0].astype(np.float16),
+            omega=prob_s[1].astype(np.float16),
+            theta=prob_s[2].astype(np.float16),
+            phi=prob_s[3].astype(np.float16),
+        )
+
+        self.write_pdb(
+            seq[0], xyz[0], idx_pdb[0], Bfacts=lddt[0], prefix=f"{out_prefix}_init"
+        )
+
         # run TRFold
-        prob_trF = list()
+        prob_trF = []
         for prob in prob_s:
             prob = torch.tensor(prob).permute(2,0,1).to(self.device)
             prob += 1e-8
-            prob = prob / torch.sum(prob, dim=0)[None]
+            prob /= torch.sum(prob, dim=0)[None]
             prob_trF.append(prob)
         xyz = xyz[0, :, 1]
         TRF = TRFold(prob_trF, fold_params)
@@ -255,18 +258,14 @@ class Predictor():
         n = N(np.cross(b-a, bc))
         m = [bc,np.cross(n,bc),n]
         d = [L*np.cos(A), L*np.sin(A)*np.cos(D), -L*np.sin(A)*np.sin(D)]
-        return c + sum([m*d for m,d in zip(m,d)])
+        return c + sum(m*d for m,d in zip(m,d))
 
     def write_pdb(self, seq, atoms, idx, Bfacts=None, prefix=None):
         L = len(seq)
-        filename = "%s.pdb"%prefix
+        filename = f"{prefix}.pdb"
         ctr = 1
         with open(filename, 'wt') as f:
-            if Bfacts == None:
-                Bfacts = np.zeros(L)
-            else:
-                Bfacts = torch.clamp( Bfacts, 0, 1)
-            
+            Bfacts = np.zeros(L) if Bfacts is None else torch.clamp( Bfacts, 0, 1)
             for i,s in enumerate(seq):
                 if (len(atoms.shape)==2):
                     f.write ("%-6s%5s %4s %3s %s%4d    %8.3f%8.3f%8.3f%6.2f%6.2f\n"%(
@@ -282,7 +281,7 @@ class Predictor():
                                 "A", idx[i]+1, atoms[i,j,0], atoms[i,j,1], atoms[i,j,2],
                                 1.0, Bfacts[i] ) )
                         ctr += 1                
-                
+
                 elif atoms.shape[1]==4:
                     for j,atm_j in enumerate((" N  "," CA "," C  ", " O  ")):
                         f.write ("%-6s%5s %4s %3s %s%4d    %8.3f%8.3f%8.3f%6.2f%6.2f\n"%(
@@ -295,8 +294,12 @@ class Predictor():
 def get_args():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", dest="model_dir", default="%s/weights"%(script_dir),
-                        help="Path to pre-trained network weights [%s/weights]"%script_dir)
+    parser.add_argument(
+        "-m",
+        dest="model_dir",
+        default=f"{script_dir}/weights",
+        help=f"Path to pre-trained network weights [{script_dir}/weights]",
+    )
     parser.add_argument("-i", dest="a3m_fn", required=True,
                         help="Input multiple sequence alignments (in a3m format)")
     parser.add_argument("-o", dest="out_prefix", required=True,
@@ -305,20 +308,23 @@ def get_args():
                         help="HHsearch output file (hhr file). If not provided, zero matrices will be given as templates")
     parser.add_argument("--atab", default=None,
                         help="HHsearch output file (atab file)")
-    parser.add_argument("--db", default="%s/pdb100_2021Mar03/pdb100_2021Mar03"%script_dir,
-                        help="Path to template database [%s/pdb100_2021Mar03]"%script_dir)
+    parser.add_argument(
+        "--db",
+        default=f"{script_dir}/pdb100_2021Mar03/pdb100_2021Mar03",
+        help=f"Path to template database [{script_dir}/pdb100_2021Mar03]",
+    )
     parser.add_argument("--cpu", dest='use_cpu', default=False, action='store_true')
 
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 if __name__ == "__main__":
     args = get_args()
     FFDB=args.db
     FFindexDB = namedtuple("FFindexDB", "index, data")
-    ffdb = FFindexDB(read_index(FFDB+'_pdb.ffindex'),
-                     read_data(FFDB+'_pdb.ffdata'))
+    ffdb = FFindexDB(
+        read_index(f'{FFDB}_pdb.ffindex'), read_data(f'{FFDB}_pdb.ffdata')
+    )
 
-    if not os.path.exists("%s.npz"%args.out_prefix):
+    if not os.path.exists(f"{args.out_prefix}.npz"):
         pred = Predictor(model_dir=args.model_dir, use_cpu=args.use_cpu)
         pred.predict(args.a3m_fn, args.out_prefix, args.hhr, args.atab)

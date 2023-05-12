@@ -17,34 +17,30 @@ FFindexEntry = namedtuple("FFindexEntry", "name, offset, length")
 
 def read_index(ffindex_filename):
     entries = []
-    
-    fh = open(ffindex_filename)
-    for line in fh:
-        tokens = line.split("\t")
-        entries.append(FFindexEntry(tokens[0], int(tokens[1]), int(tokens[2])))
-    fh.close()
-    
+
+    with open(ffindex_filename) as fh:
+        for line in fh:
+            tokens = line.split("\t")
+            entries.append(FFindexEntry(tokens[0], int(tokens[1]), int(tokens[2])))
     return entries
 
 
 def read_data(ffdata_filename):
-    fh = open(ffdata_filename, "rb")
-    data = mmap.mmap(fh.fileno(), 0, prot=mmap.PROT_READ)
-    fh.close()
+    with open(ffdata_filename, "rb") as fh:
+        data = mmap.mmap(fh.fileno(), 0, prot=mmap.PROT_READ)
     return data
 
 
 def get_entry_by_name(name, index):
-    #TODO: bsearch
-    for entry in index:
-        if(name == entry.name):
-            return entry
-    return None
+    return next((entry for entry in index if (name == entry.name)), None)
 
 
 def read_entry_lines(entry, data):
-    lines = data[entry.offset:entry.offset + entry.length - 1].decode("utf-8").split("\n")
-    return lines
+    return (
+        data[entry.offset : entry.offset + entry.length - 1]
+        .decode("utf-8")
+        .split("\n")
+    )
 
 
 def read_entry_data(entry, data):
@@ -74,18 +70,14 @@ def finish_db(entries, ffindex_filename, data_fh):
 
 def write_entries_to_db(entries, ffindex_filename):
     sorted(entries, key=lambda x: x.name)
-    index_fh = open(ffindex_filename, "w")
-
-    for entry in entries:
-        index_fh.write("{name:.64}\t{offset}\t{length}\n".format(name=entry.name, offset=entry.offset, length=entry.length))
-
-    index_fh.close()
+    with open(ffindex_filename, "w") as index_fh:
+        for entry in entries:
+            index_fh.write("{name:.64}\t{offset}\t{length}\n".format(name=entry.name, offset=entry.offset, length=entry.length))
 
 
 def write_entry_to_file(entry, data, file):
     lines = read_lines(entry, data)
 
-    fh = open(file, "w")
-    for line in lines:
-        fh.write(line+"\n")
-    fh.close()
+    with open(file, "w") as fh:
+        for line in lines:
+            fh.write(line+"\n")

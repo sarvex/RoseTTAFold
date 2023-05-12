@@ -3,10 +3,9 @@ from scipy.spatial import distance, distance_matrix
 
 # Given a pdb file,returns binary map for inter monomer interactions.
 def get_interaction_map(filename):
-    f = open(filename)
-    lines = f.readlines()
-    chain_names = np.array([l[21] for l in lines if "ATOM" in l and l[12:16]==" CA "])
-    f.close()
+    with open(filename) as f:
+        lines = f.readlines()
+        chain_names = np.array([l[21] for l in lines if "ATOM" in l and l[12:16]==" CA "])
     codes = ["A","B"]
     output = np.zeros((len(chain_names), len(chain_names)))
     output2 = []
@@ -14,7 +13,7 @@ def get_interaction_map(filename):
         temp = np.zeros((np.sum(chain_names==c), len(chain_names)))
         temp[:, chain_names==c] = 1
         output[chain_names==c, :] = temp
-        
+
         temp2 = np.zeros((len(chain_names), len(chain_names)))
         temp2[chain_names==c, :] = temp
         output2.append(temp2)

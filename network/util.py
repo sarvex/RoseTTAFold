@@ -155,7 +155,6 @@ for i in range(20):
         # case 1: if no atom defined, blank
         if (a is None):
             short2long[i,j,0] = -1
-        # case 2: atom is a base atom
         elif (a in i_s):
             short2long[i,j,0] = i_s.index(a)
             if (short2long[i,j,0] == 0):
@@ -163,17 +162,12 @@ for i in range(20):
                 short2long[i,j,2] = 2
             else:
                 short2long[i,j,1] = 0
-                if (short2long[i,j,0] == 1):
-                    short2long[i,j,2] = 2
-                else:
-                    short2long[i,j,2] = 1
-        # case 3: atom is ' O  '
+                short2long[i,j,2] = 2 if (short2long[i,j,0] == 1) else 1
         elif (a == " O  "):
             short2long[i,j,0] = 2
             short2long[i,j,1] = 0 #Nprev (will pre-roll N as nothing else needs it)
             short2long[i,j,2] = 1
             short2long[i,j,3:] = np.array(bb2oframe)
-        # case 4: build this atom
         else:
             i_f = aa2frames[i]
             names = [f[0] for f in i_f]
@@ -188,10 +182,7 @@ long2alt = np.zeros((20,14))
 for i in range(20):
     i_l, i_lalt = aa2long[i],  aa2longalt[i]
     for j,a in enumerate(i_l):
-        if (a is None):
-            long2alt[i,j] = j
-        else:
-            long2alt[i,j] = i_lalt.index(a)
+        long2alt[i,j] = j if (a is None) else i_lalt.index(a)
 
 def atoms_from_frames(base,parent,gparent,points):
     xs = parent-base
@@ -212,9 +203,7 @@ def atoms_from_frames(base,parent,gparent,points):
     zs = torch.cross(xs,ys)
     q = torch.stack((xs,ys,zs),dim=2)
 
-    retval = base + torch.einsum('nij,nj->ni',q,points)
-
-    return retval
+    return base + torch.einsum('nij,nj->ni',q,points)
 #def atoms_from_frames(base,parent,gparent,points):
 #    xs = parent-base
 #    # handle parent=base

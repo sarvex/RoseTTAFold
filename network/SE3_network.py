@@ -35,9 +35,18 @@ class TFN(nn.Module):
 
         block0 = []
         fin = fibers['in']
-        for i in range(self.num_layers-1):
-            block0.append(GConvSE3(fin, fibers['mid'], self_interaction=self.use_self, edge_dim=self.edge_dim))
-            block0.append(GNormSE3(fibers['mid'], num_layers=self.num_nlayers))
+        for _ in range(self.num_layers-1):
+            block0.extend(
+                (
+                    GConvSE3(
+                        fin,
+                        fibers['mid'],
+                        self_interaction=self.use_self,
+                        edge_dim=self.edge_dim,
+                    ),
+                    GNormSE3(fibers['mid'], num_layers=self.num_nlayers),
+                )
+            )
             fin = fibers['mid']
         block0.append(GConvSE3(fibers['mid'], fibers['out'], self_interaction=self.use_self, edge_dim=self.edge_dim))
         return nn.ModuleList(block0)
@@ -85,12 +94,23 @@ class SE3Transformer(nn.Module):
         # Equivariant layers
         Gblock = []
         fin = fibers['in']
-        for i in range(self.num_layers):
-            Gblock.append(GSE3Res(fin, fibers['mid'], edge_dim=self.edge_dim,
-                                  div=self.div, n_heads=self.n_heads,
-                                  learnable_skip=True, skip='cat',
-                                  selfint=self.si_m, x_ij=self.x_ij))
-            Gblock.append(GNormBias(fibers['mid']))
+        for _ in range(self.num_layers):
+            Gblock.extend(
+                (
+                    GSE3Res(
+                        fin,
+                        fibers['mid'],
+                        edge_dim=self.edge_dim,
+                        div=self.div,
+                        n_heads=self.n_heads,
+                        learnable_skip=True,
+                        skip='cat',
+                        selfint=self.si_m,
+                        x_ij=self.x_ij,
+                    ),
+                    GNormBias(fibers['mid']),
+                )
+            )
             fin = fibers['mid']
         Gblock.append(
             GSE3Res(fibers['mid'], fibers['out'], edge_dim=self.edge_dim,

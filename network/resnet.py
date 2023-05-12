@@ -7,8 +7,11 @@ class ResBlock2D(nn.Module):
         super(ResBlock2D, self).__init__()
         padding = self._get_same_padding(kernel, dilation)
 
-        layer_s = list()
-        layer_s.append(nn.Conv2d(n_c, n_c, kernel, padding=padding, dilation=dilation, bias=False))
+        layer_s = [
+            nn.Conv2d(
+                n_c, n_c, kernel, padding=padding, dilation=dilation, bias=False
+            )
+        ]
         layer_s.append(nn.InstanceNorm2d(n_c, affine=True, eps=1e-6))
         layer_s.append(nn.ELU(inplace=True))
         # dropout
@@ -33,10 +36,8 @@ class ResBlock2D_bottleneck(nn.Module):
         padding = self._get_same_padding(kernel, dilation)
 
         n_b = n_c // 2 # bottleneck channel
-        
-        layer_s = list()
-        # pre-activation
-        layer_s.append(nn.InstanceNorm2d(n_c, affine=True, eps=1e-6))
+
+        layer_s = [nn.InstanceNorm2d(n_c, affine=True, eps=1e-6)]
         layer_s.append(nn.ELU(inplace=True))
         # project down to n_b
         layer_s.append(nn.Conv2d(n_c, n_b, 1, bias=False))
@@ -66,14 +67,17 @@ class ResidualNetwork(nn.Module):
         super(ResidualNetwork, self).__init__()
 
 
-        layer_s = list()
+        layer_s = []
         # project to n_feat_block
         if n_feat_in != n_feat_block:
             layer_s.append(nn.Conv2d(n_feat_in, n_feat_block, 1, bias=False))
             if block_type =='orig': # should acitivate input
-                layer_s.append(nn.InstanceNorm2d(n_feat_block, affine=True, eps=1e-6))
-                layer_s.append(nn.ELU(inplace=True))
-
+                layer_s.extend(
+                    (
+                        nn.InstanceNorm2d(n_feat_block, affine=True, eps=1e-6),
+                        nn.ELU(inplace=True),
+                    )
+                )
         # add resblocks
         for i_block in range(n_block):
             d = dilation[i_block%len(dilation)]
@@ -86,10 +90,9 @@ class ResidualNetwork(nn.Module):
         if n_feat_out != n_feat_block:
             # project to n_feat_out
             layer_s.append(nn.Conv2d(n_feat_block, n_feat_out, 1))
-        
+
         self.layer = nn.Sequential(*layer_s)
     
     def forward(self, x):
-        output = self.layer(x)
-        return output
+        return self.layer(x)
 

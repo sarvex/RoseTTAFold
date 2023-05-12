@@ -50,14 +50,14 @@ def parse_a3m(filename):
 def parse_hhr(filename, ffindex, idmax=105.0):
 
     # labels present in the database
-    label_set = set([i.name for i in ffindex])
+    label_set = {i.name for i in ffindex}
 
     out = []
 
     with open(filename, "r") as hhr:
 
         # read .hhr into a list of lines
-        lines = [s.rstrip() for _,s in enumerate(hhr)]
+        lines = [s.rstrip() for s in hhr]
 
         # read list of all hits
         start = lines.index("") + 2
@@ -175,9 +175,9 @@ def parse_templates(ffdb, hhr_fn, atab_fn, n_templ=10):
 
     # process tabulated hhsearch output to get
     # matched positions and positional scores
-    infile = atab_fn 
+    infile = atab_fn
     hits = []
-    for l in open(infile, "r").readlines():
+    for l in open(infile, "r"):
         if l[0]=='>':
             key = l[1:].split()[0]
             hits.append([key,[],[]])
@@ -196,13 +196,13 @@ def parse_templates(ffdb, hhr_fn, atab_fn, n_templ=10):
     pos = [i+1 for i,l in enumerate(lines) if l[0]=='>']
     for i,posi in enumerate(pos):
         hits[i].append([float(s) for s in re.sub('[=%]',' ',lines[posi]).split()[1::2]])
-        
+
     # parse templates from FFDB
     for hi in hits:
         #if hi[0] not in ffids:
         #    continue
         entry = get_entry_by_name(hi[0], ffdb.index)
-        if entry == None:
+        if entry is None:
             continue
         data = read_entry_lines(entry, ffdb.data)
         hi += list(parse_pdb_lines(data))
@@ -213,13 +213,13 @@ def parse_templates(ffdb, hhr_fn, atab_fn, n_templ=10):
     for data in hits:
         if len(data)<7:
             continue
-        
+
         qi,ti = np.array(data[1]).T
         _,sel1,sel2 = np.intersect1d(ti, data[6], return_indices=True)
         ncol = sel1.shape[0]
         if ncol < 10:
             continue
-        
+
         ids.append(data[0])
         f0d.append(data[3])
         f1d.append(np.array(data[2])[sel1])
@@ -233,7 +233,7 @@ def parse_templates(ffdb, hhr_fn, atab_fn, n_templ=10):
     f0d = np.vstack(f0d).astype(np.float32)
     f1d = np.vstack(f1d).astype(np.float32)
     ids = ids
-        
+
     return torch.from_numpy(xyz), torch.from_numpy(qmap), \
            torch.from_numpy(f0d), torch.from_numpy(f1d), ids
 
@@ -244,7 +244,7 @@ def read_templates(qlen, ffdb, hhr_fn, atab_fn, n_templ=10):
     #
     xyz = torch.full((npick, qlen, 3, 3), np.nan).float()
     f1d = torch.zeros((npick, qlen, 3)).float()
-    f0d = list()
+    f0d = []
     #
     for i, nt in enumerate(sample):
         sel = torch.where(qmap[:,1] == nt)[0]

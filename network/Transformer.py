@@ -6,7 +6,7 @@ import math
 from performer_pytorch import SelfAttention
 
 def _get_clones(module, N):
-    return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
+    return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
 
 # for gradient checkpointing
 def create_custom_forward(module, **kwargs):
@@ -43,9 +43,9 @@ class FeedForwardLayer(nn.Module):
 class MultiheadAttention(nn.Module):
     def __init__(self, d_model, heads, k_dim=None, v_dim=None, dropout=0.1):
         super(MultiheadAttention, self).__init__()
-        if k_dim == None:
+        if k_dim is None:
             k_dim = d_model
-        if v_dim == None:
+        if v_dim is None:
             v_dim = d_model
 
         self.heads = heads
@@ -84,9 +84,9 @@ class MultiheadAttention(nn.Module):
 class TiedMultiheadAttention(nn.Module):
     def __init__(self, d_model, heads, k_dim=None, v_dim=None, dropout=0.1):
         super(TiedMultiheadAttention, self).__init__()
-        if k_dim == None:
+        if k_dim is None:
             k_dim = d_model
-        if v_dim == None:
+        if v_dim is None:
             v_dim = d_model
 
         self.heads = heads
@@ -157,9 +157,9 @@ class SequenceWeight(nn.Module):
 class SoftTiedMultiheadAttention(nn.Module):
     def __init__(self, d_model, heads, k_dim=None, v_dim=None, dropout=0.1):
         super(SoftTiedMultiheadAttention, self).__init__()
-        if k_dim == None:
+        if k_dim is None:
             k_dim = d_model
-        if v_dim == None:
+        if v_dim is None:
             v_dim = d_model
 
         self.heads = heads
@@ -304,9 +304,7 @@ class EncoderLayer(nn.Module):
         src2 = self.norm2(src) # pre-normalization
         src2 = self.ff(src2)
         src = src + self.dropout2(src2)
-        if return_att:
-            return src, att
-        return src
+        return (src, att) if return_att else src
 
 # AxialTransformer with tied attention for L dimension
 class AxialEncoderLayer(nn.Module):
@@ -322,20 +320,18 @@ class AxialEncoderLayer(nn.Module):
             self.attn_L = TiedMultiheadAttention(d_model, heads, dropout=p_drop)
         elif use_soft_row:
             self.attn_L = SoftTiedMultiheadAttention(d_model, heads, dropout=p_drop)
+        elif self.use_performer:
+            self.attn_L = SelfAttention(dim=d_model, heads=heads, dropout=p_drop, 
+                                        generalized_attention=True, **performer_opts)
         else:
-            if self.use_performer:
-                self.attn_L = SelfAttention(dim=d_model, heads=heads, dropout=p_drop, 
-                                            generalized_attention=True, **performer_opts)
-            else:
-                self.attn_L = MultiheadAttention(d_model, heads, dropout=p_drop)
+            self.attn_L = MultiheadAttention(d_model, heads, dropout=p_drop)
         if use_tied_col:
             self.attn_N = TiedMultiheadAttention(d_model, heads, dropout=p_drop)
+        elif self.use_performer:
+            self.attn_N = SelfAttention(dim=d_model, heads=heads, dropout=p_drop, 
+                                        generalized_attention=True, **performer_opts)
         else:
-            if self.use_performer:
-                self.attn_N = SelfAttention(dim=d_model, heads=heads, dropout=p_drop, 
-                                            generalized_attention=True, **performer_opts)
-            else:
-                self.attn_N = MultiheadAttention(d_model, heads, dropout=p_drop)
+            self.attn_N = MultiheadAttention(d_model, heads, dropout=p_drop)
 
         # feedforward
         self.ff = FeedForwardLayer(d_model, d_ff, p_drop=p_drop)

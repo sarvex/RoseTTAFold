@@ -76,8 +76,7 @@ def rbf(D):
     D_mu = D_mu[None,:]
     D_sigma = (D_max - D_min) / D_count
     D_expand = torch.unsqueeze(D, -1)
-    RBF = torch.exp(-((D_expand - D_mu) / D_sigma)**2)
-    return RBF
+    return torch.exp(-((D_expand - D_mu) / D_sigma)**2)
 
 class CoevolExtractor(nn.Module):
     def __init__(self, n_feat_proj, n_feat_out, p_drop=0.1):
@@ -185,8 +184,7 @@ class Pair2MSA(nn.Module):
         self.encoder = CrossEncoder(enc_layer, n_layer)
 
     def forward(self, pair, msa):
-        out = self.encoder(pair, msa) # (B, N, L, K)
-        return out
+        return self.encoder(pair, msa)
 
 class Pair2Pair(nn.Module):
     def __init__(self, n_layer=1, n_att_head=8, n_feat=128, r_ff=4, p_drop=0.1,
@@ -269,11 +267,9 @@ class Str2MSA(nn.Module):
     def forward(self, msa, xyz, state):
         dist = torch.cdist(xyz[:,:,1], xyz[:,:,1]) # (B, L, L)
 
-        mask_s = list()
-        for distbin in self.distbin:
-            mask_s.append(1.0 - torch.sigmoid(dist-distbin))
+        mask_s = [1.0 - torch.sigmoid(dist-distbin) for distbin in self.distbin]
         mask_s = torch.stack(mask_s, dim=1) # (B, h, L, L)
-        
+
         state = self.norm_state(state)
         msa2 = self.norm1(msa)
         msa2 = self.attn(state, state, msa2, mask_s)
@@ -460,18 +456,18 @@ class IterativeFeatureExtractor(nn.Module):
         # input:
         #   msa: initial MSA embeddings (N, L, d_msa)
         #   pair: initial residue pair embeddings (L, L, d_pair)
-        
-        pair_s = list()
+
+        pair_s = []
         pair = self.initial(pair)
         if self.n_module > 0:
             for i_m in range(self.n_module):
                 # extract features from MSA & update original pair features
                 msa, pair = self.iter_block_1[i_m](msa, pair)
-       
+
         xyz = self.init_str(seq1hot, idx, msa, pair)
 
-        top_ks = [128, 128, 64, 64]
         if self.n_module_str > 0:
+            top_ks = [128, 128, 64, 64]
             for i_m in range(self.n_module_str):
                 msa, pair, xyz = self.iter_block_2[i_m](msa, pair, xyz, seq1hot, idx, top_k=top_ks[i_m])
 

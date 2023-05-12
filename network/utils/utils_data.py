@@ -12,8 +12,8 @@ class PickleGraph:
     """Lightweight graph object for easy pickling. Does not support batched graphs."""
 
     def __init__(self, G=None, desired_keys=None):
-        self.ndata = dict()
-        self.edata = dict()
+        self.ndata = {}
+        self.edata = {}
 
         if G is None:
             self.src = []
@@ -48,11 +48,7 @@ def copy_dgl_graph(G):
         return G2
     else:
         list_of_graphs = dgl.unbatch(G)
-        list_of_copies = []
-
-        for batch_G in list_of_graphs:
-            list_of_copies.append(copy_dgl_graph(batch_G))
-
+        list_of_copies = [copy_dgl_graph(batch_G) for batch_G in list_of_graphs]
         return dgl.batch(list_of_copies)
 
 

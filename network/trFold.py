@@ -16,18 +16,27 @@ def Q2R(Q):
     xx,xy,xz,xw = x*x, x*y, x*z, x*w
     yy,yz,yw = y*y, y*z, y*w
     zz,zw = z*z, z*w
-    R = torch.stack([1-2*yy-2*zz, 2*xy-2*zw,   2*xz+2*yw,
-                     2*xy+2*zw,   1-2*xx-2*zz, 2*yz-2*xw,
-                     2*xz-2*yw,   2*yz+2*xw,   1-2*xx-2*yy],dim=-1).view(b,l,3,3)
-    return R
+    return torch.stack(
+        [
+            1 - 2 * yy - 2 * zz,
+            2 * xy - 2 * zw,
+            2 * xz + 2 * yw,
+            2 * xy + 2 * zw,
+            1 - 2 * xx - 2 * zz,
+            2 * yz - 2 * xw,
+            2 * xz - 2 * yw,
+            2 * yz + 2 * xw,
+            1 - 2 * xx - 2 * yy,
+        ],
+        dim=-1,
+    ).view(b, l, 3, 3)
 
 def get_cb(N,Ca,C):
     """recreate Cb given N,Ca,C"""
     b = Ca - N
     c = C - Ca
     a = torch.cross(b, c, dim=-1)
-    Cb = -0.58273431*a + 0.56802827*b - 0.54067466*c + Ca    
-    return Cb
+    return -0.58273431*a + 0.56802827*b - 0.54067466*c + Ca
 
 # ============================================================
 def get_ang(a, b, c):
@@ -121,11 +130,15 @@ class TRFold():
         t = (m4m3*m[:,1:-2] + m2m1*m[:,2:-1])/(m4m3+m2m1)
         t[torch.isnan(t)] = 0.0
         dy = y[:,3:-2]-y[:,2:-3]
-        coef = torch.stack([y[:,2:-3],
-                            t[:,:-1],
-                            (3*dy/h - 2*t[:,:-1] - t[:,1:])/h,
-                            (t[:,:-1]+t[:,1:] - 2*dy/h)/h**2], dim=-1)
-        return coef
+        return torch.stack(
+            [
+                y[:, 2:-3],
+                t[:, :-1],
+                (3 * dy / h - 2 * t[:, :-1] - t[:, 1:]) / h,
+                (t[:, :-1] + t[:, 1:] - 2 * dy / h) / h**2,
+            ],
+            dim=-1,
+        )
         
     def fold(self, xyz, batch=32, lr=0.8, nsteps=100):
 

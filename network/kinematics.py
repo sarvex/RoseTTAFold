@@ -22,8 +22,7 @@ def get_pair_dist(a, b):
            stores paitwise distances between atoms in a and b
     """
 
-    dist = torch.cdist(a, b, p=2)
-    return dist
+    return torch.cdist(a, b, p=2)
 
 # ============================================================
 def get_ang(a, b, c):

@@ -34,11 +34,7 @@ def get_basis(G, max_degree, compute_gradients):
         where the 1's will later be broadcast to the number of output and input
         channels
     """
-    if compute_gradients:
-        context = nullcontext()
-    else:
-        context = torch.no_grad()
-
+    context = nullcontext() if compute_gradients else torch.no_grad()
     with context:
         cloned_d = torch.clone(G.edata['d'])
 
@@ -180,17 +176,17 @@ class GConvSE3(nn.Module):
             msg = msg.view(msg.shape[0], -1, 2*d_out+1)
 
             # Center -> center messages
-            if self.self_interaction:
-                if f'{d_out}' in self.kernel_self.keys():
-                    if self.flavor == 'TFN':
-                        W = self.kernel_self[f'{d_out}']
-                        msg = torch.matmul(W, msg)
-                    if self.flavor == 'skip':
-                        dst = edges.dst[f'{d_out}']
-                        W = self.kernel_self[f'{d_out}']
-                        msg = msg + torch.matmul(W, dst)
+            if self.self_interaction and f'{d_out}' in self.kernel_self.keys():
+                if self.flavor == 'TFN':
+                    W = self.kernel_self[f'{d_out}']
+                    msg = torch.matmul(W, msg)
+                if self.flavor == 'skip':
+                    dst = edges.dst[f'{d_out}']
+                    W = self.kernel_self[f'{d_out}']
+                    msg = msg + torch.matmul(W, dst)
 
             return {'msg': msg.view(msg.shape[0], -1, 2*d_out+1)}
+
         return fnc
 
     def forward(self, h, G=None, r=None, basis=None, **kwargs):
@@ -330,11 +326,11 @@ class G1x1SE3(nn.Module):
          return f"G1x1SE3(structure={self.f_out})"
 
     def forward(self, features, **kwargs):
-        output = {}
-        for k, v in features.items():
-            if str(k) in self.transform.keys():
-                output[k] = torch.matmul(self.transform[str(k)], v)
-        return output
+        return {
+            k: torch.matmul(self.transform[str(k)], v)
+            for k, v in features.items()
+            if str(k) in self.transform.keys()
+        }
 
 
 class GNormBias(nn.Module):
@@ -363,7 +359,7 @@ class GNormBias(nn.Module):
             self.bias[str(d)] = nn.Parameter(torch.randn(m).view(1, m))
 
     def __repr__(self):
-        return f"GNormTFN()"
+        return "GNormTFN()"
 
 
     def forward(self, features, **kwargs):
@@ -411,14 +407,16 @@ class GAttentiveSelfInt(nn.Module):
 
     def _build_net(self, m_in: int, m_out):
         n_hidden = m_in * m_out
-        cur_inpt = m_in * m_in
+        cur_inpt = m_in**2
         net = []
         for i in range(1, self.num_layers):
-            net.append(nn.LayerNorm(int(cur_inpt)))
-            net.append(self.nonlin)
-            # TODO: implement cleaner init
-            net.append(
-                nn.Linear(cur_inpt, n_hidden, bias=(i == self.num_layers - 1)))
+            net.extend(
+                (
+                    nn.LayerNorm(int(cur_inpt)),
+                    self.nonlin,
+                    nn.Linear(cur_inpt, n_hidden, bias=(i == self.num_layers - 1)),
+                )
+            )
             nn.init.kaiming_uniform_(net[-1].weight)
             cur_inpt = n_hidden
         return nn.Sequential(*net)
@@ -494,14 +492,10 @@ class GNormSE3(nn.Module):
     def _build_net(self, m: int):
         net = []
         for i in range(self.num_layers):
-            net.append(BN(int(m)))
-            net.append(self.nonlin)
-            # TODO: implement cleaner init
-            net.append(nn.Linear(m, m, bias=(i==self.num_layers-1)))
+            net.extend((BN(m), self.nonlin, nn.Linear(m, m, bias=(i==self.num_layers-1))))
             nn.init.kaiming_uniform_(net[-1].weight)
         if self.num_layers == 0:
-            net.append(BN(int(m)))
-            net.append(self.nonlin)
+            net.extend((BN(m), self.nonlin))
         return nn.Sequential(*net)
 
     def forward(self, features, **kwargs):
@@ -724,11 +718,10 @@ class GMABSE3(nn.Module):
             for d in self.f_value.degrees:
                 G.update_all(self.udf_u_mul_e(d), fn.sum('m', f'out{d}'))
 
-            output = {}
-            for m, d in self.f_value.structure:
-                output[f'{d}'] = G.ndata[f'out{d}'].view(-1, m, 2*d+1)
-
-            return output
+            return {
+                f'{d}': G.ndata[f'out{d}'].view(-1, m, 2 * d + 1)
+                for m, d in self.f_value.structure
+            }
 
 
 class GSE3Res(nn.Module):
@@ -861,10 +854,7 @@ class GCat(nn.Module):
         out = {}
         for k in self.f_out.degrees:
             k = str(k)
-            if k in y:
-                out[k] = torch.cat([x[k], y[k]], 1)
-            else:
-                out[k] = x[k]
+            out[k] = torch.cat([x[k], y[k]], 1) if k in y else x[k]
         return out
 
 
